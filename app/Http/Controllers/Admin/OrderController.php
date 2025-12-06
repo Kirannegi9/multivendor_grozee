@@ -227,20 +227,31 @@ class OrderController extends Controller
         if (isset($order)) {
             if (isset($order->store)) {
                 $deliveryMen = DeliveryMan::where('zone_id', $order->store->zone_id)
-                ->where(function($query)use($order){
-                            $query->where('vehicle_id',$order->dm_vehicle_id)->orWhereNull('vehicle_id');
-                    })->available()->active()->get();
+                    ->where(function($query)use($order){
+                        $query->where('vehicle_id',$order->dm_vehicle_id)->orWhereNull('vehicle_id');
+                    })
+                    ->available()->active()->get();
             } else {
                 // $deliveryMen = isset($order->zone_id) ? DeliveryMan::where('zone_id', $order->zone_id)->zonewise()->available()->active()->get() : [];
-
                 if($order->store !== null){
-                    $deliveryMen = isset($order->zone_id) ? DeliveryMan::where('zone_id', $order->store->zone_id)->where(function($query)use($order){
+                    $deliveryMen = isset($order->zone_id) ? DeliveryMan::where('zone_id', $order->store->zone_id)
+                        ->where(function($query)use($order){
                             $query->where('vehicle_id',$order->dm_vehicle_id)->orWhereNull('vehicle_id');
-                    })
-                    ->available()->active()->get():[];
+                        })
+                        ->available()->active()->get():[];
                 } else{
-                    $deliveryMen = DeliveryMan::where('zone_id', '=', NULL)->where('vehicle_id',$order->dm_vehicle_id)->active()->get();
+                    $deliveryMen = DeliveryMan::where('zone_id', '=', NULL)
+                        ->where('vehicle_id',$order->dm_vehicle_id)
+                        ->active()->get();
                 }
+            }
+            // Fallback: if no delivery men match vehicle/availability filters, show all active in store zone
+            if ($deliveryMen->isEmpty() && isset($order->store)) {
+                $deliveryMen = DeliveryMan::where('zone_id', $order->store->zone_id)->active()->get();
+            }
+            // Ultimate fallback: show any active deliverymen (cross-zone) so admins can still assign
+            if ($deliveryMen->isEmpty()) {
+                $deliveryMen = DeliveryMan::active()->get();
             }
             $category = $request->query('category_id', 0);
             // $sub_category = $request->query('sub_category', 0);

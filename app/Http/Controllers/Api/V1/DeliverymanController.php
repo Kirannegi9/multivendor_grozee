@@ -425,7 +425,7 @@ class DeliverymanController extends Controller
         ]);
 
         $validator->sometimes('otp', 'required', function ($request) {
-            return (Config::get('order_delivery_verification')==1 && $request['status']=='delivered');
+            return (Config::get('order_delivery_verification')==1 && ($request['status']=='delivered' || $request['status']=='picked_up'));
         });
 
         if ($validator->fails()) {
@@ -470,22 +470,109 @@ class DeliverymanController extends Controller
             ], 403);
         }
 
-        if(Config::get('order_delivery_verification')==1 && $order->payment_method=='cash_on_delivery' && $order->charge_payer=='sender' && $request['status']=='picked_up' && $order->otp != $request['otp'])
+        // Validate OTP when order_delivery_verification is enabled
+        $order_delivery_verification = Config::get('order_delivery_verification');
+        // Check config value in multiple ways to ensure we catch it correctly
+        $is_otp_enabled = (
+            $order_delivery_verification == 1 || 
+            $order_delivery_verification == '1' || 
+            $order_delivery_verification === true ||
+            $order_delivery_verification === 'true' ||
+            (int)$order_delivery_verification === 1
+        );
+        
+        // Determine if OTP validation is required for this status
+        $require_otp_validation = false;
+        
+        if($is_otp_enabled && $request['status']=='delivered')
         {
-            return response()->json([
-                'errors' => [
-                    ['code' => 'otp', 'message' => translate('Not matched')]
-                ]
-            ], 406);
+            // For delivered status: always require OTP when order_delivery_verification is enabled and payment is COD
+            if($order->payment_method=='cash_on_delivery')
+            {
+                $require_otp_validation = true;
+            }
         }
-
-        if(Config::get('order_delivery_verification')==1 && $order->payment_method=='cash_on_delivery' &&  $request['status']=='delivered' && $order->otp != $request['otp'])
+        elseif($is_otp_enabled && $request['status']=='picked_up')
         {
-            return response()->json([
-                'errors' => [
-                    ['code' => 'otp', 'message' => translate('Not matched')]
-                ]
-            ], 406);
+            // For picked_up status: require OTP when payment is COD and charge_payer is sender
+            if($order->payment_method=='cash_on_delivery' && $order->charge_payer=='sender')
+            {
+                $require_otp_validation = true;
+            }
+        }
+        
+        // Perform strict OTP validation
+        if($require_otp_validation)
+        {
+            // Check if OTP exists in order
+            if(empty($order->otp) || is_null($order->otp))
+            {
+                return response()->json([
+                    'errors' => [
+                        ['code' => 'otp', 'message' => translate('OTP not generated for this order')]
+                    ]
+                ], 406);
+            }
+            
+            // Check if OTP is provided in request
+            if(!isset($request['otp']) || $request['otp'] === null || $request['otp'] === '')
+            {
+                return response()->json([
+                    'errors' => [
+                        ['code' => 'otp', 'message' => translate('OTP is required')]
+                    ]
+                ], 406);
+            }
+            
+            // Strict comparison - convert both to strings, trim whitespace, and compare
+            $order_otp = trim((string)$order->otp);
+            $request_otp = trim((string)$request['otp']);
+            
+            // Additional check: ensure both are numeric strings of same length
+            if(strlen($order_otp) !== strlen($request_otp))
+            {
+                return response()->json([
+                    'errors' => [
+                        ['code' => 'otp', 'message' => translate('Not matched')]
+                    ]
+                ], 406);
+            }
+            
+            // Strict string comparison - this is the critical check
+            if($order_otp !== $request_otp)
+            {
+                return response()->json([
+                    'errors' => [
+                        ['code' => 'otp', 'message' => translate('Not matched')]
+                    ]
+                ], 406);
+            }
+        }
+        
+        // Additional safeguard: If OTP is provided and order_delivery_verification is enabled, 
+        // always validate it to prevent bypassing validation
+        if($is_otp_enabled && isset($request['otp']) && $request['otp'] !== null && $request['otp'] !== '')
+        {
+            if(empty($order->otp) || is_null($order->otp))
+            {
+                return response()->json([
+                    'errors' => [
+                        ['code' => 'otp', 'message' => translate('OTP not generated for this order')]
+                    ]
+                ], 406);
+            }
+            
+            $order_otp = trim((string)$order->otp);
+            $request_otp = trim((string)$request['otp']);
+            
+            if($order_otp !== $request_otp)
+            {
+                return response()->json([
+                    'errors' => [
+                        ['code' => 'otp', 'message' => translate('Not matched')]
+                    ]
+                ], 406);
+            }
         }
         if ($request->status == 'delivered')
         {

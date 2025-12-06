@@ -1888,21 +1888,29 @@
                 <div class="modal-body">
                     <div class="row">
                         <div class="col-md-5 my-2">
-                            <ul class="list-group overflow-auto initial--23">
-                                @foreach ($deliveryMen as $dm)
-                                    <li class="list-group-item">
-                                        <span class="dm_list" role='button' data-id="{{ $dm['id'] }}">
-                                            <img class="avatar avatar-sm avatar-circle mr-1 onerror-image"
-                                                data-onerror-image="{{ asset('assets/admin/img/160x160/img1.jpg') }}"
-                                                src="{{$dm['image_full_url'] }}"
-                                                alt="{{ $dm['name'] }}">
-                                            {{ $dm['name'] }}
-                                        </span>
+                            @if(count($deliveryMen) > 0)
+                                <ul class="list-group overflow-auto initial--23">
+                                    @foreach ($deliveryMen as $dm)
+                                        <li class="list-group-item">
+                                            <span class="dm_list" role='button' data-id="{{ $dm['id'] }}">
+                                                <img class="avatar avatar-sm avatar-circle mr-1 onerror-image"
+                                                    data-onerror-image="{{ asset('assets/admin/img/160x160/img1.jpg') }}"
+                                                    src="{{$dm['image_full_url'] }}"
+                                                    alt="{{ $dm['name'] }}">
+                                                {{ $dm['name'] }}
+                                            </span>
 
-                                        <a class="btn btn-primary btn-xs float-right add-delivery-man" data-id="{{ $dm['id'] }}">{{ translate('messages.assign') }}</a>
-                                    </li>
-                                @endforeach
-                            </ul>
+                                            <a class="btn btn-primary btn-xs float-right add-delivery-man" data-id="{{ $dm['id'] }}">{{ translate('messages.assign') }}</a>
+                                        </li>
+                                    @endforeach
+                                </ul>
+                            @else
+                                <div class="alert alert-warning text-center">
+                                    <i class="tio-warning"></i>
+                                    <p class="mb-2"><strong>No deliveryman available</strong></p>
+                                    <small class="text-muted">No active deliverymen found for this order's zone. Please check deliveryman zone assignment and availability status.</small>
+                                </div>
+                            @endif
                         </div>
                         <div class="col-md-7 modal_body_map">
                             <div class="location-map" id="dmassign-map">
