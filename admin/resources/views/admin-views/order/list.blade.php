@@ -300,11 +300,10 @@
                             <td>
                                 <div>
                                     @if(!empty($order->schedule_at) && strpos($order->schedule_at, ' to ') !== false)
-                                        @php
-                                        $parts = explode(' to ', $order->schedule_at);
-                                        $start = trim($parts[0] ?? '');
-                                        $end = trim($parts[1] ?? '');
-                                        @endphp
+                                        @php($parts = explode(' to ', $order->schedule_at))
+                                        @php($start = trim($parts[0] ?? ''))
+                                        @php($end = trim($parts[1] ?? ''))
+                                       
                                         <div>
                                             @if(!empty($start))
                                                 {{ \App\CentralLogics\Helpers::date_format($start) }}

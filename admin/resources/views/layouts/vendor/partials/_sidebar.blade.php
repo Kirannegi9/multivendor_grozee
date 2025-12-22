@@ -245,6 +245,22 @@
                     </li>
                     @endif
                     <!-- End AddOn -->
+
+                    <!-- Unit -->
+                    @if(\App\CentralLogics\Helpers::employee_module_permission_check('unit'))
+                    <li class="navbar-vertical-aside-has-menu {{Request::is('store-panel/unit*')?'active':''}}">
+                        <a class="js-navbar-vertical-aside-menu-link nav-link"
+                            href="{{route('vendor.unit.index')}}" title="{{translate('messages.units')}}"
+                        >
+                            <i class="tio-ruler nav-icon"></i>
+                            <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate text-capitalize">
+                                {{translate('messages.units')}}
+                            </span>
+                        </a>
+                    </li>
+                    @endif
+                    <!-- End Unit -->
+
                     @if(\App\CentralLogics\Helpers::employee_module_permission_check('item'))
                     <!-- Food -->
                     <li class="navbar-vertical-aside-has-menu {{Request::is('store-panel/item*')?'active':''}}">

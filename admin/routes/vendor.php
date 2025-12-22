@@ -214,6 +214,16 @@ Route::group(['namespace' => 'Vendor', 'as' => 'vendor.'], function () {
             Route::delete('delete/{id}', 'AddOnController@delete')->name('delete');
         });
 
+        Route::group(['prefix' => 'unit', 'as' => 'unit.', 'middleware' => ['module:unit']], function () {
+            Route::get('/', 'UnitController@index')->name('index');
+            Route::post('store', 'UnitController@add')->name('store');
+            Route::get('edit/{id}', 'UnitController@getUpdateView')->name('edit');
+            Route::put('update/{id}', 'UnitController@update')->name('update');
+            Route::post('search', 'UnitController@search')->name('search');
+            Route::delete('delete/{id}', 'UnitController@delete')->name('destroy');
+            Route::get('export/{type}', 'UnitController@exportList')->name('export');
+        });
+
         Route::group(['prefix' => 'order', 'as' => 'order.' , 'middleware' => ['module:order']], function () {
             Route::get('list/{status}', 'OrderController@list')->name('list');
             Route::put('status-update/{id}', 'OrderController@status')->name('status-update');
