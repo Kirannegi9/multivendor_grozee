@@ -2214,24 +2214,103 @@ Log::info("test");
     }
 
 
-    private function createCashBackHistory($order_amount, $user_id,$order_id){
-        $cashBack =  Helpers::getCalculatedCashBackAmount(amount:$order_amount, customer_id:$user_id);
-        if(data_get($cashBack,'calculated_amount') > 0){
-            $CashBackHistory = new CashBackHistory();
-            $CashBackHistory->user_id = $user_id;
-            $CashBackHistory->order_id = $order_id;
-            $CashBackHistory->calculated_amount = data_get($cashBack,'calculated_amount');
-            $CashBackHistory->cashback_amount = data_get($cashBack,'cashback_amount');
-            $CashBackHistory->cash_back_id = data_get($cashBack,'id');
-            $CashBackHistory->cashback_type = data_get($cashBack,'cashback_type');
-            $CashBackHistory->min_purchase = data_get($cashBack,'min_purchase');
-            $CashBackHistory->max_discount = data_get($cashBack,'max_discount');
-            $CashBackHistory->save();
+   private function createCashBackHistory($order_amount, $user_id, $order_id)
+{
+    Log::info('Cashback process started', [
+        'order_id'     => $order_id,
+        'user_id'      => $user_id,
+        'order_amount' => $order_amount,
+    ]);
+    
+    // Get order
+    $order = Order::find($order_id);
 
-            $CashBackHistory?->order()->update([
-                'cash_back_id'=> $CashBackHistory->id
-            ]);
-        }
+    if (!$order) {
+        Log::warning('Order not found for cashback calculation', [
+            'order_id' => $order_id
+        ]);
         return true;
     }
+
+    Log::info('Order found', [
+        'order_id' => $order->id,
+        'coupon_discount_amount' => $order->coupon_discount_amount,
+        'coupon_code' => $order->coupon_code
+    ]);
+
+    // Cashback and coupon cannot run together
+    if ($order->coupon_discount_amount > 0 || !empty($order->coupon_code)) {
+        Log::info('Cashback skipped due to coupon usage', [
+            'order_id' => $order_id
+        ]);
+        return true;
+    }
+
+    try {
+        $cashBack = Helpers::getCalculatedCashBackAmount(
+            amount: $order_amount,
+            customer_id: $user_id
+        );
+
+        Log::info('Cashback calculation result', [
+            'order_id' => $order_id,
+            'user_id'  => $user_id,
+            'cashback' => $cashBack,
+        ]);
+
+        if (data_get($cashBack, 'calculated_amount') > 0) {
+
+            $CashBackHistory = new CashBackHistory();
+            $CashBackHistory->user_id            = $user_id;
+            $CashBackHistory->order_id           = $order_id;
+            $CashBackHistory->calculated_amount  = data_get($cashBack, 'calculated_amount');
+            $CashBackHistory->cashback_amount    = data_get($cashBack, 'cashback_amount');
+            $CashBackHistory->cash_back_id       = data_get($cashBack, 'id');
+            $CashBackHistory->cashback_type      = data_get($cashBack, 'cashback_type');
+            $CashBackHistory->min_purchase       = data_get($cashBack, 'min_purchase');
+            $CashBackHistory->max_discount       = data_get($cashBack, 'max_discount');
+
+            $CashBackHistory->save();
+
+            Log::info('Cashback history saved', [
+                'cashback_history_id' => $CashBackHistory->id,
+                'order_id'            => $order_id,
+                'user_id'             => $user_id,
+                'calculated_amount'   => $CashBackHistory->calculated_amount,
+            ]);
+
+            $updated = $CashBackHistory?->order()->update([
+                'cash_back_id' => $CashBackHistory->id
+            ]);
+
+            Log::info('Order cashback ID updated', [
+                'order_id'  => $order_id,
+                'updated'   => $updated,
+                'cashback_history_id' => $CashBackHistory->id,
+            ]);
+
+        } else {
+            Log::warning('Cashback skipped: calculated amount is zero or invalid', [
+                'order_id' => $order_id,
+                'user_id'  => $user_id,
+                'cashback' => $cashBack,
+            ]);
+        }
+
+        return true;
+
+    } catch (\Throwable $e) {
+
+        Log::error('Cashback process failed', [
+            'order_id' => $order_id,
+            'user_id'  => $user_id,
+            'amount'   => $order_amount,
+            'error'    => $e->getMessage(),
+            'trace'    => $e->getTraceAsString(),
+        ]);
+
+        return false;
+    }
+}
+
 }
