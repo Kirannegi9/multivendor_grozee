@@ -710,17 +710,6 @@ if ($request->schedule_at && str_contains($request->schedule_at, ' to ')) {
             $order->processing_charge = 0;
         }
         
-        $smallcart_charge_status = BusinessSetting::where('key', 'smallcart_charge_status')->first()->value;
-$smallcart_charge = BusinessSetting::where('key', 'smallcart_charge')->first()->value;
-$smallcart_value = BusinessSetting::where('key', 'smallcart_value')->first()->value;
-
-if ($smallcart_charge_status == 1 && $request['order_amount'] < $smallcart_value) {
-    $order->smallcart_charge = $smallcart_charge ?? 0;
-} else {
-    $order->smallcart_charge = 0;
-}
-
-
         // extra packaging charge
         $extra_packaging_data = BusinessSetting::where('key', 'extra_packaging_data')->first()?->value ?? '';
         $extra_packaging_data =json_decode($extra_packaging_data , true);
@@ -999,7 +988,16 @@ if ($smallcart_charge_status == 1 && $request['order_amount'] < $smallcart_value
 
             $total_price = $product_price + $total_addon_price - $store_discount_amount - $flash_sale_admin_discount_amount - $flash_sale_vendor_discount_amount  - $coupon_discount_amount;
 
+            // Calculate small cart charge based on item amount (product_price + total_addon_price)
+            $smallcart_charge_status = BusinessSetting::where('key', 'smallcart_charge_status')->first()->value;
+            $smallcart_charge = BusinessSetting::where('key', 'smallcart_charge')->first()->value;
+            $smallcart_value = BusinessSetting::where('key', 'smallcart_value')->first()->value;
 
+            if ($smallcart_charge_status == 1 && ($product_price + $total_addon_price) < $smallcart_value) {
+                $order->smallcart_charge = $smallcart_charge ?? 0;
+            } else {
+                $order->smallcart_charge = 0;
+            }
 
             if($order->is_guest  == 0 && $order->user_id ){
                 $user= User::withcount('orders')->find($order->user_id);
@@ -2214,103 +2212,43 @@ Log::info("test");
     }
 
 
-   private function createCashBackHistory($order_amount, $user_id, $order_id)
-{
-    Log::info('Cashback process started', [
-        'order_id'     => $order_id,
-        'user_id'      => $user_id,
-        'order_amount' => $order_amount,
-    ]);
-    
-    // Get order
-    $order = Order::find($order_id);
-
-    if (!$order) {
-        Log::warning('Order not found for cashback calculation', [
-            'order_id' => $order_id
-        ]);
-        return true;
-    }
-
-    Log::info('Order found', [
-        'order_id' => $order->id,
-        'coupon_discount_amount' => $order->coupon_discount_amount,
-        'coupon_code' => $order->coupon_code
-    ]);
-
-    // Cashback and coupon cannot run together
-    if ($order->coupon_discount_amount > 0 || !empty($order->coupon_code)) {
-        Log::info('Cashback skipped due to coupon usage', [
-            'order_id' => $order_id
-        ]);
-        return true;
-    }
-
-    try {
-        $cashBack = Helpers::getCalculatedCashBackAmount(
-            amount: $order_amount,
-            customer_id: $user_id
-        );
-
-        Log::info('Cashback calculation result', [
-            'order_id' => $order_id,
-            'user_id'  => $user_id,
-            'cashback' => $cashBack,
-        ]);
-
-        if (data_get($cashBack, 'calculated_amount') > 0) {
-
+    private function createCashBackHistory($order_amount, $user_id,$order_id){
+        // Get order to calculate item total (excluding delivery, tax, tips, and additional charges)
+        $order = Order::find($order_id);
+        if (!$order) {
+            return true;
+        }
+        
+        // Cashback and discount coupons cannot run together
+        // If a coupon is applied, cashback should not be calculated
+        if ($order->coupon_discount_amount > 0 || !empty($order->coupon_code)) {
+            return true;
+        }
+        
+        // Calculate item total: order_amount - tax (if excluded) - delivery_charge - dm_tips - additional_charge
+        $item_total = $order->order_amount 
+            - ($order->tax_status == 'excluded' ? $order->total_tax_amount : 0)
+            - ($order->delivery_charge ?? 0)
+            - ($order->dm_tips ?? 0)
+            - ($order->additional_charge ?? 0);
+        
+        $cashBack =  Helpers::getCalculatedCashBackAmount(amount:$item_total, customer_id:$user_id);
+        if(data_get($cashBack,'calculated_amount') > 0){
             $CashBackHistory = new CashBackHistory();
-            $CashBackHistory->user_id            = $user_id;
-            $CashBackHistory->order_id           = $order_id;
-            $CashBackHistory->calculated_amount  = data_get($cashBack, 'calculated_amount');
-            $CashBackHistory->cashback_amount    = data_get($cashBack, 'cashback_amount');
-            $CashBackHistory->cash_back_id       = data_get($cashBack, 'id');
-            $CashBackHistory->cashback_type      = data_get($cashBack, 'cashback_type');
-            $CashBackHistory->min_purchase       = data_get($cashBack, 'min_purchase');
-            $CashBackHistory->max_discount       = data_get($cashBack, 'max_discount');
-
+            $CashBackHistory->user_id = $user_id;
+            $CashBackHistory->order_id = $order_id;
+            $CashBackHistory->calculated_amount = data_get($cashBack,'calculated_amount');
+            $CashBackHistory->cashback_amount = data_get($cashBack,'cashback_amount');
+            $CashBackHistory->cash_back_id = data_get($cashBack,'id');
+            $CashBackHistory->cashback_type = data_get($cashBack,'cashback_type');
+            $CashBackHistory->min_purchase = data_get($cashBack,'min_purchase');
+            $CashBackHistory->max_discount = data_get($cashBack,'max_discount');
             $CashBackHistory->save();
 
-            Log::info('Cashback history saved', [
-                'cashback_history_id' => $CashBackHistory->id,
-                'order_id'            => $order_id,
-                'user_id'             => $user_id,
-                'calculated_amount'   => $CashBackHistory->calculated_amount,
-            ]);
-
-            $updated = $CashBackHistory?->order()->update([
-                'cash_back_id' => $CashBackHistory->id
-            ]);
-
-            Log::info('Order cashback ID updated', [
-                'order_id'  => $order_id,
-                'updated'   => $updated,
-                'cashback_history_id' => $CashBackHistory->id,
-            ]);
-
-        } else {
-            Log::warning('Cashback skipped: calculated amount is zero or invalid', [
-                'order_id' => $order_id,
-                'user_id'  => $user_id,
-                'cashback' => $cashBack,
+            $CashBackHistory?->order()->update([
+                'cash_back_id'=> $CashBackHistory->id
             ]);
         }
-
         return true;
-
-    } catch (\Throwable $e) {
-
-        Log::error('Cashback process failed', [
-            'order_id' => $order_id,
-            'user_id'  => $user_id,
-            'amount'   => $order_amount,
-            'error'    => $e->getMessage(),
-            'trace'    => $e->getTraceAsString(),
-        ]);
-
-        return false;
     }
-}
-
 }
