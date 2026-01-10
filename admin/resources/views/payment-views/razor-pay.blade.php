@@ -21,6 +21,13 @@
                 data-image="{{ $business_logo ?? 'default.png' }}"
                 data-prefill.name="{{$payer->name ?? ''}}"
                 data-prefill.email="{{$payer->email ?? ''}}"
+                @if(isset($payer->phone) && !empty($payer->phone))
+                data-prefill.contact="{{$payer->phone}}"
+                @endif
+                @if(isset($saved_upi_id) && !empty($saved_upi_id))
+                data-prefill.method="upi"
+                data-prefill.vpa="{{$saved_upi_id}}"
+                @endif
                 data-theme.color="#ff7529">
         </script>
         <button class="btn btn-block" id="pay-button" type="submit" style="display:none"></button>
