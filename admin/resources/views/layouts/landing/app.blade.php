@@ -11,6 +11,12 @@ $countryCode= strtolower($country?$country->value:'auto');
     <meta charset="UTF-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    
+    <!-- SEO Meta Tags - Ensure non-www domain is preferred -->
+    <link rel="canonical" href="https://grozee.com{{ request()->path() ? '/' . request()->path() : '/' }}" />
+    <meta property="og:url" content="https://grozee.com{{ request()->path() ? '/' . request()->path() : '/' }}" />
+    <meta property="og:site_name" content="Grozee" />
+    <meta name="twitter:url" content="https://grozee.com{{ request()->path() ? '/' . request()->path() : '/' }}" />
 
     <title>@yield('title')</title>
 

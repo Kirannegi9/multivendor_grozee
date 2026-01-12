@@ -2,6 +2,17 @@
 
   RewriteEngine On
   RewriteBase /
+  
+  # Redirect www to non-www (301 permanent redirect for SEO)
+  # This ensures search engines prefer grozee.com over www.grozee.com
+  # Handles both HTTP and HTTPS
+  RewriteCond %{HTTP_HOST} ^www\.grozee\.com$ [NC]
+  RewriteCond %{HTTPS} on
+  RewriteRule ^(.*)$ https://grozee.com/$1 [R=301,L]
+  RewriteCond %{HTTP_HOST} ^www\.grozee\.com$ [NC]
+  RewriteCond %{HTTPS} off
+  RewriteRule ^(.*)$ https://grozee.com/$1 [R=301,L]
+  
   RewriteRule ^index\.html$ - [L]
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
